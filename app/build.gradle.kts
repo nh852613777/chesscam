@@ -6,6 +6,12 @@ plugins {
 android {
     namespace = "com.nsmod.chesscam"
     compileSdk = 34
+    
+    // Cần thiết để chứa file Stockfish
+    androidResources {
+        noCompress += listOf("bin")
+    }
+    
     defaultConfig {
         applicationId = "com.nsmod.chesscam"
         minSdk = 24
@@ -27,7 +33,5 @@ dependencies {
     implementation("androidx.compose.ui:ui:1.6.1")
     implementation("androidx.compose.material3:material3:1.2.0")
     debugImplementation("androidx.compose.ui:ui-tooling:1.6.1")
-    
-    // Thư viện Stockfish AAR tự động xử lý phần cứng
-    implementation("com.github.navikt:stockfish-java:1.0.0")
+    // KHÔNG CÒN THƯ VIỆN STOCKFISH NÀO Ở ĐÂY
 }
