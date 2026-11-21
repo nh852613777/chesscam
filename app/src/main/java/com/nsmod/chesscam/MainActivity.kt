@@ -22,6 +22,7 @@ import com.github.bhlangonijr.chesslib.Piece
 import com.github.bhlangonijr.chesslib.Side
 import com.github.bhlangonijr.chesslib.move.Move
 import com.github.bhlangonijr.chesslib.PieceType
+import com.github.bhlangonijr.chesslib.Rank
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -39,12 +40,10 @@ class MainActivity : ComponentActivity() {
         var status by remember { mutableStateOf("Chọn màu của bạn.") }
         var isAnalyzing by remember { mutableStateOf(false) }
         
-        // Biến xử lý phong cấp
         var showPromoDialog by remember { mutableStateOf(false) }
         var promoFrom by remember { mutableStateOf<Square?>(null) }
         var promoTo by remember { mutableStateOf<Square?>(null) }
 
-        // Kết quả phân tích
         var bestMoveText by remember { mutableStateOf("") }
         var scoreText by remember { mutableStateOf("") }
         var pvText by remember { mutableStateOf("") }
@@ -75,25 +74,32 @@ class MainActivity : ComponentActivity() {
                     }
                 } else {
                     val from = selectedSquare!!
-                    // Kiểm tra xem có phải phong cấp không
-                    if (piece == Piece.NONE && board.getPiece(from) == Piece.WHITE_PAWN && sq.rank == com.github.bhlangonijr.chesslib.Rank.RANK_8) {
-                        promoFrom = from
-                        promoTo = sq
-                        showPromoDialog = true
-                        status = "Chọn quân để phong cấp!"
-                    } else if (piece == Piece.NONE && board.getPiece(from) == Piece.BLACK_PAWN && sq.rank == com.github.bhlangonijr.chesslib.Rank.RANK_1) {
-                        promoFrom = from
-                        promoTo = sq
-                        showPromoDialog = true
-                        status = "Chọn quân để phong cấp!"
-                    } else {
-                        val move = Move(from, sq)
-                        if (board.isMoveLegal(move, true)) {
-                            executeMove(move)
-                        } else {
-                            status = "Nước đi không hợp lệ!"
-                            selectedSquare = null
+                    val pFrom = board.getPiece(from)
+                    
+                    // Kiểm tra phong cấp (nếu Tốt đi đến hàng cuối)
+                    if (pFrom.pieceType == PieceType.PAWN && 
+                        ((pFrom.pieceSide == Side.WHITE && sq.rank == Rank.RANK_8) || 
+                         (pFrom.pieceSide == Side.BLACK && sq.rank == Rank.RANK_1))) {
+                        
+                        // Kiểm tra sơ bộ xem nước đi có hợp lệ không (chưa cần chọn quân phong cấp)
+                        val tempMove = Move(from, sq, pFrom) // Tạm dùng chính nó để check
+                        // Nếu là nước đi hợp lệ (có thể ăn quân hoặc đi thẳng)
+                        if (board.isMoveLegal(Move(from, sq, Piece.make(PieceType.QUEEN, pFrom.pieceSide)), true)) {
+                            promoFrom = from
+                            promoTo = sq
+                            showPromoDialog = true
+                            status = "Chọn quân để phong cấp!"
+                            return
                         }
+                    }
+                    
+                    // Đi quân bình thường
+                    val move = Move(from, sq)
+                    if (board.isMoveLegal(move, true)) {
+                        executeMove(move)
+                    } else {
+                        status = "Nước đi không hợp lệ!"
+                        selectedSquare = null
                     }
                 }
             } else {
@@ -106,7 +112,7 @@ class MainActivity : ComponentActivity() {
             AlertDialog(
                 onDismissRequest = { showPromoDialog = false },
                 title = { Text("Phong Cấp") },
-                text = { Text("Chọn quân để phong cấp cho Tốt:") },
+                text = { Text("Chọn quân để phong cấp:") },
                 confirmButton = {
                     Row {
                         listOf(
@@ -118,7 +124,9 @@ class MainActivity : ComponentActivity() {
                             TextButton(onClick = {
                                 val from = promoFrom!!
                                 val to = promoTo!!
-                                val move = Move(from, to, if (myColor == Side.WHITE) Piece.make(type, Side.WHITE) else Piece.make(type, Side.BLACK))
+                                val pFrom = board.getPiece(from)
+                                // Sử dụng đúng hàm Piece.make của chesslib
+                                val move = Move(from, to, Piece.make(type, pFrom.pieceSide))
                                 if (board.isMoveLegal(move, true)) {
                                     executeMove(move)
                                 }
