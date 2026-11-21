@@ -6,11 +6,6 @@ plugins {
 android {
     namespace = "com.nsmod.chesscam"
     compileSdk = 34
-    
-    androidResources {
-        noCompress += listOf("bin")
-    }
-    
     defaultConfig {
         applicationId = "com.nsmod.chesscam"
         minSdk = 24
@@ -33,6 +28,6 @@ dependencies {
     implementation("androidx.compose.material3:material3:1.2.0")
     debugImplementation("androidx.compose.ui:ui-tooling:1.6.1")
     
-    // Thư viện chuẩn Android của chess
-    implementation("com.github.bhlangonijr:chesslib:1.3.3") 
+    // Thư viện Stockfish AAR tự động xử lý phần cứng
+    implementation("com.github.navikt:stockfish-java:1.0.0")
 }
