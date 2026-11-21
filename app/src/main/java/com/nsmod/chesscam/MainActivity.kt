@@ -21,6 +21,7 @@ import com.github.bhlangonijr.chesslib.Square
 import com.github.bhlangonijr.chesslib.Piece
 import com.github.bhlangonijr.chesslib.Side
 import com.github.bhlangonijr.chesslib.move.Move
+import com.github.bhlangonijr.chesslib.PieceType
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -38,45 +39,95 @@ class MainActivity : ComponentActivity() {
         var status by remember { mutableStateOf("Chọn màu của bạn.") }
         var isAnalyzing by remember { mutableStateOf(false) }
         
-        // Kết quả phân tích giống Python
+        // Biến xử lý phong cấp
+        var showPromoDialog by remember { mutableStateOf(false) }
+        var promoFrom by remember { mutableStateOf<Square?>(null) }
+        var promoTo by remember { mutableStateOf<Square?>(null) }
+
+        // Kết quả phân tích
         var bestMoveText by remember { mutableStateOf("") }
         var scoreText by remember { mutableStateOf("") }
         var pvText by remember { mutableStateOf("") }
         
         var suggestedMove by remember { mutableStateOf<Pair<Square, Square>?>(null) }
 
+        fun executeMove(move: Move) {
+            board.doMove(move)
+            selectedSquare = null
+            suggestedMove = null
+            bestMoveText = ""
+            scoreText = ""
+            pvText = ""
+            status = "Đã đi nước: $move. Bấm 'AI Phân Tích'."
+        }
+
         fun onSquareClick(sq: Square) {
-            if (isAnalyzing) return
+            if (isAnalyzing || showPromoDialog) return
             
             val currentTurn = board.sideToMove
             val piece = board.getPiece(sq)
 
             if (currentTurn != myColor) {
-                // LƯỢT ĐỐI THỦ: Cho phép chạm để nhập nước đi
                 if (selectedSquare == null) {
                     if (piece != Piece.NONE && piece.pieceSide == currentTurn) {
                         selectedSquare = sq
                         status = "Đang nhập nước đối thủ. Chạm ô đích."
                     }
                 } else {
-                    val move = Move(selectedSquare, sq)
-                    if (board.isMoveLegal(move, true)) {
-                        board.doMove(move)
-                        selectedSquare = null
-                        suggestedMove = null
-                        bestMoveText = ""
-                        scoreText = ""
-                        pvText = ""
-                        status = "Đã nhập nước đối thủ. Bấm 'AI Phân Tích'."
+                    val from = selectedSquare!!
+                    // Kiểm tra xem có phải phong cấp không
+                    if (piece == Piece.NONE && board.getPiece(from) == Piece.WHITE_PAWN && sq.rank == com.github.bhlangonijr.chesslib.Rank.RANK_8) {
+                        promoFrom = from
+                        promoTo = sq
+                        showPromoDialog = true
+                        status = "Chọn quân để phong cấp!"
+                    } else if (piece == Piece.NONE && board.getPiece(from) == Piece.BLACK_PAWN && sq.rank == com.github.bhlangonijr.chesslib.Rank.RANK_1) {
+                        promoFrom = from
+                        promoTo = sq
+                        showPromoDialog = true
+                        status = "Chọn quân để phong cấp!"
                     } else {
-                        status = "Nước đi không hợp lệ!"
-                        selectedSquare = null
+                        val move = Move(from, sq)
+                        if (board.isMoveLegal(move, true)) {
+                            executeMove(move)
+                        } else {
+                            status = "Nước đi không hợp lệ!"
+                            selectedSquare = null
+                        }
                     }
                 }
             } else {
-                // LƯỢT CỦA BẠN
                 status = "Lượt của bạn. Bấm 'AI Phân Tích'."
             }
+        }
+
+        // DIALOG PHONG CẤP
+        if (showPromoDialog) {
+            AlertDialog(
+                onDismissRequest = { showPromoDialog = false },
+                title = { Text("Phong Cấp") },
+                text = { Text("Chọn quân để phong cấp cho Tốt:") },
+                confirmButton = {
+                    Row {
+                        listOf(
+                            Pair("Hậu", PieceType.QUEEN),
+                            Pair("Xe", PieceType.ROOK),
+                            Pair("Tượng", PieceType.BISHOP),
+                            Pair("Mã", PieceType.KNIGHT)
+                        ).forEach { (name, type) ->
+                            TextButton(onClick = {
+                                val from = promoFrom!!
+                                val to = promoTo!!
+                                val move = Move(from, to, if (myColor == Side.WHITE) Piece.make(type, Side.WHITE) else Piece.make(type, Side.BLACK))
+                                if (board.isMoveLegal(move, true)) {
+                                    executeMove(move)
+                                }
+                                showPromoDialog = false
+                            }) { Text(name) }
+                        }
+                    }
+                }
+            )
         }
 
         Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
@@ -93,12 +144,10 @@ class MainActivity : ComponentActivity() {
             }
 
             Spacer(Modifier.height(16.dp))
-            
             BoardView(board, selectedSquare, suggestedMove, ::onSquareClick)
 
             Spacer(Modifier.height(16.dp))
             
-            // Bảng phân tích
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp)) {
                     Text("KẾT QUẢ PHÂN TÍCH (Stockfish)", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
