@@ -16,15 +16,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.niklasb.stockfish.StockfishEngine
+import java.io.File
 
 class MainActivity : ComponentActivity() {
-    private var stockfish: StockfishEngine? = null
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Khởi tạo engine JNI
-        stockfish = StockfishEngine(this)
         setContent { ChessScreen() }
     }
 
@@ -49,6 +45,7 @@ class MainActivity : ComponentActivity() {
             val pieceColor = if (isWhitePiece) "w" else "b"
 
             if (currentTurn != myColor) {
+                // LƯỢT ĐỐI THỦ: Cho phép chạm để nhập nước đi
                 if (selected == null) {
                     if (piece != '.' && pieceColor == currentTurn) {
                         selected = Pair(f, r)
@@ -76,6 +73,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             } else {
+                // LƯỢT CỦA BẠN
                 status = "Lượt của bạn. Bấm 'AI Phân Tích'."
             }
         }
@@ -118,24 +116,17 @@ class MainActivity : ComponentActivity() {
                         suggested = null
                         val fen = gridToFen(grid, currentTurn)
                         Thread {
-                            try {
-                                val bestMove = stockfish?.bestMove(fen)
-                                runOnUiThread {
-                                    if (bestMove != null && bestMove != "(none)") {
-                                        val f1 = bestMove[0] - 'a'; val r1 = 8 - (bestMove[1] - '0')
-                                        val f2 = bestMove[2] - 'a'; val r2 = 8 - (bestMove[3] - '0')
-                                        suggested = Pair(Pair(f1, r1), Pair(f2, r2))
-                                        analysisText = "Nước đi tốt nhất: ${bestMove.substring(0,2)} -> ${bestMove.substring(2,4)}"
-                                    } else {
-                                        analysisText = "Không tìm thấy nước đi."
-                                    }
-                                    isAnalyzing = false
+                            val bestMoveStr = runStockfish(fen)
+                            runOnUiThread {
+                                if (bestMoveStr != null && bestMoveStr != "(none)") {
+                                    val f1 = bestMoveStr[0] - 'a'; val r1 = 8 - (bestMoveStr[1] - '0')
+                                    val f2 = bestMoveStr[2] - 'a'; val r2 = 8 - (bestMoveStr[3] - '0')
+                                    suggested = Pair(Pair(f1, r1), Pair(f2, r2))
+                                    analysisText = "Nước đi tốt nhất: ${bestMoveStr.substring(0,2)} -> ${bestMoveStr.substring(2,4)}"
+                                } else {
+                                    analysisText = "Lỗi: Không chạy được Stockfish. Kiểm tra file nativeLibraryDir!"
                                 }
-                            } catch (e: Exception) {
-                                runOnUiThread {
-                                    analysisText = "Lỗi: ${e.message}"
-                                    isAnalyzing = false
-                                }
+                                isAnalyzing = false
                             }
                         }.start()
                     },
@@ -200,6 +191,29 @@ class MainActivity : ComponentActivity() {
             rows.add(sb.toString())
         }
         return rows.joinToString("/") + " $turn - - 0 1"
+    }
+
+    fun runStockfish(fen: String): String? {
+        try {
+            val binFile = File(applicationInfo.nativeLibraryDir, "libstockfish.so")
+            if (!binFile.exists()) return null
+            
+            val process = ProcessBuilder(binFile.absolutePath).redirectErrorStream(true).start()
+            val writer = process.outputStream.bufferedWriter()
+            val reader = process.inputStream.bufferedReader()
+            writer.write("uci\n"); writer.flush()
+            var line: String?
+            while (true) { line = reader.readLine() ?: break; if (line == "uciok") break }
+            writer.write("position fen $fen\n"); writer.flush()
+            writer.write("go depth 15\n"); writer.flush()
+            var bestMove: String? = null
+            while (true) { line = reader.readLine() ?: break; if (line.startsWith("bestmove")) { bestMove = line.split(" ")[1]; break } }
+            writer.write("quit\n"); writer.flush(); process.waitFor()
+            return bestMove
+        } catch (e: Exception) { 
+            e.printStackTrace()
+            return null 
+        }
     }
 
     @Composable
