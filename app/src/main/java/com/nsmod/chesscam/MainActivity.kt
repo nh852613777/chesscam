@@ -224,9 +224,8 @@ class MainActivity : ComponentActivity() {
             for (r in 7 downTo 0) {
                 Row {
                     for (f in 0..7) {
-                        val file = com.github.bhlangonijr.chesslib.File.values()[f]
-                        val rank = com.github.bhlangonijr.chesslib.Rank.values()[r]
-                        val sq = Square.getSquare(file, rank)
+                        // Sử dụng Square.values() thay vì getSquare()
+                        val sq = Square.values()[r * 8 + f]
                         
                         val piece = board.getPiece(sq)
                         val light = (r + f) % 2 == 0
