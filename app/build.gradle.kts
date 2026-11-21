@@ -27,7 +27,4 @@ dependencies {
     implementation("androidx.compose.ui:ui:1.6.1")
     implementation("androidx.compose.material3:material3:1.2.0")
     debugImplementation("androidx.compose.ui:ui-tooling:1.6.1")
-    
-    // Thư viện Stockfish CÓ THẬT trên JitPack
-    implementation("com.github.vayun-mathur:Stockfish-Library:1.1.0")
 }
