@@ -7,6 +7,7 @@ android {
     namespace = "com.nsmod.chesscam"
     compileSdk = 34
     
+    // Chứa file Stockfish
     androidResources {
         noCompress += listOf("bin")
     }
@@ -32,7 +33,4 @@ dependencies {
     implementation("androidx.compose.ui:ui:1.6.1")
     implementation("androidx.compose.material3:material3:1.2.0")
     debugImplementation("androidx.compose.ui:ui-tooling:1.6.1")
-    
-    // Hạ xuống bản 1.2.2 để không bị lỗi Kotlin compiler
-    implementation("com.github.bhlangonijr:chesslib:1.2.2")
 }
