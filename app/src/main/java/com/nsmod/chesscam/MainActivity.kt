@@ -43,7 +43,6 @@ class MainActivity : ComponentActivity() {
             val piece = grid[r][f]
 
             if (currentTurn != myColor) {
-                // Nhập nước đối thủ
                 if (selected == null) {
                     if (piece != '.') {
                         selected = Pair(f, r)
@@ -121,7 +120,7 @@ class MainActivity : ComponentActivity() {
                                     suggested = Pair(Pair(f1, r1), Pair(f2, r2))
                                     analysisText = "Nước đi tốt nhất: ${bestMoveStr.substring(0,2)} -> ${bestMoveStr.substring(2,4)}"
                                 } else {
-                                    analysisText = "Lỗi: Không chạy được Stockfish. Kiểm tra file assets/stockfish.bin!"
+                                    analysisText = "Lỗi: Không chạy được Stockfish."
                                 }
                                 isAnalyzing = false
                             }
@@ -190,11 +189,10 @@ class MainActivity : ComponentActivity() {
 
     fun runStockfish(fen: String): String? {
         try {
-            val binFile = File(filesDir, "stockfish")
-            if (!binFile.exists()) {
-                assets.open("stockfish.bin").use { input -> binFile.outputStream().use { output -> input.copyTo(output) } }
-                binFile.setExecutable(true, false)
-            }
+            // ĐƯỜNG DẪN MỚI: Lấy trực tiếp từ thư mục thư viện hệ thống của Android
+            val binFile = File(applicationInfo.nativeLibraryDir, "libstockfish.so")
+            if (!binFile.exists()) return null
+            
             val process = ProcessBuilder(binFile.absolutePath).redirectErrorStream(true).start()
             val writer = process.outputStream.bufferedWriter()
             val reader = process.inputStream.bufferedReader()
