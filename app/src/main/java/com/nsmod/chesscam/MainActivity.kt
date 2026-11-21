@@ -16,15 +16,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.github.mr_4ndr01d.stockfish.Stockfish
+import com.vayunmathur.stockfish.Stockfish
 
 class MainActivity : ComponentActivity() {
     private var stockfish: Stockfish? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Khởi tạo JNI Engine
-        stockfish = Stockfish()
+        // Khởi tạo engine từ thư viện
+        stockfish = Stockfish(this)
         setContent { ChessScreen() }
     }
 
@@ -37,7 +37,6 @@ class MainActivity : ComponentActivity() {
         var isAnalyzing by remember { mutableStateOf(false) }
         
         var moveCount by remember { mutableIntStateOf(0) }
-        // Lượt thực tế (Trắng luôn đi trước)
         val currentTurn = if (moveCount % 2 == 0) "w" else "b"
 
         var suggested by remember { mutableStateOf<Pair<Pair<Int, Int>, Pair<Int, Int>>?>(null) }
@@ -93,8 +92,6 @@ class MainActivity : ComponentActivity() {
             }
 
             Spacer(Modifier.height(16.dp))
-            
-            // Truyền myColor vào để lật bàn cờ nếu cần
             BoardView(grid, myColor, selected, suggested, ::onSquareClick)
 
             Spacer(Modifier.height(16.dp))
@@ -119,7 +116,6 @@ class MainActivity : ComponentActivity() {
                         suggested = null
                         val fen = gridToFen(grid, currentTurn)
                         Thread {
-                            // Sử dụng API JNI thay vì ProcessBuilder
                             try {
                                 val bestMove = stockfish?.bestMove(fen)
                                 runOnUiThread {
@@ -157,7 +153,6 @@ class MainActivity : ComponentActivity() {
         val isWhite = p.isUpperCase()
         val target = g[r2][f2]
         if (target != '.' && target.isUpperCase() == isWhite) return false
-
         val df = kotlin.math.abs(f2 - f1); val dr = kotlin.math.abs(r2 - r1)
         return when (p.uppercaseChar()) {
             'P' -> {
@@ -203,18 +198,10 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun BoardView(
-        g: Array<Array<Char>>, 
-        myColor: String,
-        selected: Pair<Int, Int>?, 
-        suggested: Pair<Pair<Int, Int>, Pair<Int, Int>>?, 
-        onSquareClick: (Int, Int) -> Unit
-    ) {
+    fun BoardView(g: Array<Array<Char>>, myColor: String, selected: Pair<Int, Int>?, suggested: Pair<Pair<Int, Int>, Pair<Int, Int>>?, onSquareClick: (Int, Int) -> Unit) {
         Column {
-            // Lật bàn cờ nếu người chơi chọn Đen
             val rRange = if (myColor == "w") 0..7 else 7 downTo 0
             val fRange = if (myColor == "w") 0..7 else 7 downTo 0
-
             for (r in rRange) {
                 Row {
                     for (f in fRange) {
@@ -223,7 +210,6 @@ class MainActivity : ComponentActivity() {
                         val isSelected = selected == Pair(f, r)
                         val isSugFrom = suggested?.first == Pair(f, r)
                         val isSugTo = suggested?.second == Pair(f, r)
-                        
                         val bgColor = when {
                             isSelected -> Color(0xFFFFD700)
                             isSugFrom -> Color(0xFF90EE90)
@@ -231,7 +217,6 @@ class MainActivity : ComponentActivity() {
                             light -> Color(0xFFEEEED2)
                             else -> Color(0xFF769656)
                         }
-
                         Surface(
                             color = bgColor,
                             modifier = Modifier.size(40.dp).clickable { onSquareClick(f, r) },
