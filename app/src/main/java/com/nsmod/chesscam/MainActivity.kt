@@ -16,11 +16,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import java.io.File
+import com.github.mr_4ndr01d.stockfish.Stockfish
 
 class MainActivity : ComponentActivity() {
+    private var stockfish: Stockfish? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Khởi tạo JNI Engine
+        stockfish = Stockfish()
         setContent { ChessScreen() }
     }
 
@@ -33,6 +37,7 @@ class MainActivity : ComponentActivity() {
         var isAnalyzing by remember { mutableStateOf(false) }
         
         var moveCount by remember { mutableIntStateOf(0) }
+        // Lượt thực tế (Trắng luôn đi trước)
         val currentTurn = if (moveCount % 2 == 0) "w" else "b"
 
         var suggested by remember { mutableStateOf<Pair<Pair<Int, Int>, Pair<Int, Int>>?>(null) }
@@ -70,7 +75,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             } else {
-                status = "Lượt của bạn. Bấm 'AI Phân Tích' để xem gợi ý."
+                status = "Lượt của bạn. Bấm 'AI Phân Tích'."
             }
         }
 
@@ -82,13 +87,15 @@ class MainActivity : ComponentActivity() {
                     colors = ButtonDefaults.buttonColors(containerColor = if (myColor == "w") Color.Green else Color.Gray)
                 ) { Text("Trắng") }
                 Button(
-                    onClick = { myColor = "b"; grid = startGrid(); suggested = null; moveCount = 0; status = "Bạn chơi Đen." },
+                    onClick = { myColor = "b"; grid = startGrid(); suggested = null; moveCount = 0; status = "Bạn chơi Đen. Hãy nhập nước đi của Trắng trước." },
                     colors = ButtonDefaults.buttonColors(containerColor = if (myColor == "b") Color.Green else Color.Gray)
                 ) { Text("Đen") }
             }
 
             Spacer(Modifier.height(16.dp))
-            BoardView(grid, selected, suggested, ::onSquareClick)
+            
+            // Truyền myColor vào để lật bàn cờ nếu cần
+            BoardView(grid, myColor, selected, suggested, ::onSquareClick)
 
             Spacer(Modifier.height(16.dp))
             Card(modifier = Modifier.fillMaxWidth()) {
@@ -112,17 +119,25 @@ class MainActivity : ComponentActivity() {
                         suggested = null
                         val fen = gridToFen(grid, currentTurn)
                         Thread {
-                            val bestMoveStr = runStockfish(fen)
-                            runOnUiThread {
-                                if (bestMoveStr != null && bestMoveStr != "(none)") {
-                                    val f1 = bestMoveStr[0] - 'a'; val r1 = 8 - (bestMoveStr[1] - '0')
-                                    val f2 = bestMoveStr[2] - 'a'; val r2 = 8 - (bestMoveStr[3] - '0')
-                                    suggested = Pair(Pair(f1, r1), Pair(f2, r2))
-                                    analysisText = "Nước đi tốt nhất: ${bestMoveStr.substring(0,2)} -> ${bestMoveStr.substring(2,4)}"
-                                } else {
-                                    analysisText = "Lỗi: Không chạy được Stockfish."
+                            // Sử dụng API JNI thay vì ProcessBuilder
+                            try {
+                                val bestMove = stockfish?.bestMove(fen)
+                                runOnUiThread {
+                                    if (bestMove != null && bestMove != "(none)") {
+                                        val f1 = bestMove[0] - 'a'; val r1 = 8 - (bestMove[1] - '0')
+                                        val f2 = bestMove[2] - 'a'; val r2 = 8 - (bestMove[3] - '0')
+                                        suggested = Pair(Pair(f1, r1), Pair(f2, r2))
+                                        analysisText = "Nước đi tốt nhất: ${bestMove.substring(0,2)} -> ${bestMove.substring(2,4)}"
+                                    } else {
+                                        analysisText = "Không tìm thấy nước đi."
+                                    }
+                                    isAnalyzing = false
                                 }
-                                isAnalyzing = false
+                            } catch (e: Exception) {
+                                runOnUiThread {
+                                    analysisText = "Lỗi: ${e.message}"
+                                    isAnalyzing = false
+                                }
                             }
                         }.start()
                     },
@@ -142,6 +157,7 @@ class MainActivity : ComponentActivity() {
         val isWhite = p.isUpperCase()
         val target = g[r2][f2]
         if (target != '.' && target.isUpperCase() == isWhite) return false
+
         val df = kotlin.math.abs(f2 - f1); val dr = kotlin.math.abs(r2 - r1)
         return when (p.uppercaseChar()) {
             'P' -> {
@@ -186,43 +202,28 @@ class MainActivity : ComponentActivity() {
         return rows.joinToString("/") + " $turn - - 0 1"
     }
 
-    fun runStockfish(fen: String): String? {
-        try {
-            // Lấy từ thư mục thư viện hệ thống của Android
-            val binFile = File(applicationInfo.nativeLibraryDir, "libstockfish.so")
-            if (!binFile.exists()) {
-                return null
-            }
-            
-            val process = ProcessBuilder(binFile.absolutePath).redirectErrorStream(true).start()
-            val writer = process.outputStream.bufferedWriter()
-            val reader = process.inputStream.bufferedReader()
-            writer.write("uci\n"); writer.flush()
-            var line: String?
-            while (true) { line = reader.readLine() ?: break; if (line == "uciok") break }
-            writer.write("position fen $fen\n"); writer.flush()
-            writer.write("go depth 15\n"); writer.flush()
-            var bestMove: String? = null
-            while (true) { line = reader.readLine() ?: break; if (line.startsWith("bestmove")) { bestMove = line.split(" ")[1]; break } }
-            writer.write("quit\n"); writer.flush(); process.waitFor()
-            return bestMove
-        } catch (e: Exception) { 
-            e.printStackTrace()
-            return null 
-        }
-    }
-
     @Composable
-    fun BoardView(g: Array<Array<Char>>, selected: Pair<Int, Int>?, suggested: Pair<Pair<Int, Int>, Pair<Int, Int>>?, onSquareClick: (Int, Int) -> Unit) {
+    fun BoardView(
+        g: Array<Array<Char>>, 
+        myColor: String,
+        selected: Pair<Int, Int>?, 
+        suggested: Pair<Pair<Int, Int>, Pair<Int, Int>>?, 
+        onSquareClick: (Int, Int) -> Unit
+    ) {
         Column {
-            for (r in 0..7) {
+            // Lật bàn cờ nếu người chơi chọn Đen
+            val rRange = if (myColor == "w") 0..7 else 7 downTo 0
+            val fRange = if (myColor == "w") 0..7 else 7 downTo 0
+
+            for (r in rRange) {
                 Row {
-                    for (f in 0..7) {
+                    for (f in fRange) {
                         val piece = g[r][f]
                         val light = (r + f) % 2 == 0
                         val isSelected = selected == Pair(f, r)
                         val isSugFrom = suggested?.first == Pair(f, r)
                         val isSugTo = suggested?.second == Pair(f, r)
+                        
                         val bgColor = when {
                             isSelected -> Color(0xFFFFD700)
                             isSugFrom -> Color(0xFF90EE90)
@@ -230,6 +231,7 @@ class MainActivity : ComponentActivity() {
                             light -> Color(0xFFEEEED2)
                             else -> Color(0xFF769656)
                         }
+
                         Surface(
                             color = bgColor,
                             modifier = Modifier.size(40.dp).clickable { onSquareClick(f, r) },
