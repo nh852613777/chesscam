@@ -12,16 +12,6 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
-        
-        // Cấu hình NDK để biên dịch C++
-        ndk {
-            abiFilters += listOf("arm64-v8a")
-        }
-        externalNativeBuild {
-            cmake {
-                cppFlags += "-std=c++17 -O3"
-            }
-        }
     }
     buildFeatures { compose = true }
     composeOptions { kotlinCompilerExtensionVersion = "1.5.8" }
@@ -30,13 +20,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    
-    // Chỉ định file CMakeLists.txt
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-        }
-    }
 }
 
 dependencies {
@@ -44,4 +27,7 @@ dependencies {
     implementation("androidx.compose.ui:ui:1.6.1")
     implementation("androidx.compose.material3:material3:1.2.0")
     debugImplementation("androidx.compose.ui:ui-tooling:1.6.1")
+    
+    // Thư viện cờ vua thuần Java (có sẵn trên Maven Central)
+    implementation("com.github.bhlangonijr:chesslib:1.3.3")
 }
