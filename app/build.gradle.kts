@@ -1,38 +1,17 @@
-plugins {
-    id("com.android.application")
-    id("org.jetbrains.kotlin.android")
-}
-
-android {
-    namespace = "com.nsmod.chesscam"
-    compileSdk = 34
-    
-    // Cần thiết để chứa file Stockfish không bị nén
-    androidResources {
-        noCompress += listOf("bin")
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
     }
-    
-    defaultConfig {
-        applicationId = "com.nsmod.chesscam"
-        minSdk = 24
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
-    }
-    buildFeatures { compose = true }
-    composeOptions { kotlinCompilerExtensionVersion = "1.5.8" }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-    kotlinOptions { jvmTarget = "17" }
 }
-
-dependencies {
-    implementation("androidx.activity:activity-compose:1.8.2")
-    implementation("androidx.compose.ui:ui:1.6.1")
-    implementation("androidx.compose.material3:material3:1.2.0")
-    debugImplementation("androidx.compose.ui:ui-tooling:1.6.1")
-    // Thư viện cờ vua (xử lý luật, chặn nước đi sai)
-    implementation("com.github.bhlangonijr:chesslib:1.3.3")
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = uri("https://jitpack.io") } // Cực kỳ quan trọng để tải thư viện cờ vua
+    }
 }
+rootProject.name = "ChessCam"
+include(":app")
