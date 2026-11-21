@@ -76,12 +76,10 @@ class MainActivity : ComponentActivity() {
                     val from = selectedSquare!!
                     val pFrom = board.getPiece(from)
                     
-                    // Kiểm tra phong cấp
                     if (pFrom.pieceType == PieceType.PAWN && 
                         ((pFrom.pieceSide == Side.WHITE && sq.rank == Rank.RANK_8) || 
                          (pFrom.pieceSide == Side.BLACK && sq.rank == Rank.RANK_1))) {
                         
-                        // Dùng Piece.make(pieceSide, pieceType) theo chuẩn chesslib
                         if (board.isMoveLegal(Move(from, sq, Piece.make(pFrom.pieceSide, PieceType.QUEEN)), true)) {
                             promoFrom = from
                             promoTo = sq
@@ -122,7 +120,6 @@ class MainActivity : ComponentActivity() {
                                 val from = promoFrom!!
                                 val to = promoTo!!
                                 val pFrom = board.getPiece(from)
-                                // Dùng Piece.make(pieceSide, pieceType)
                                 val move = Move(from, to, Piece.make(pFrom.pieceSide, type))
                                 if (board.isMoveLegal(move, true)) {
                                     executeMove(move)
@@ -196,7 +193,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                     status = "Phân tích hoàn tất."
                                 } else {
-                                    status = "Lỗi khi chạy Stockfish."
+                                    status = "Lỗi: Không chạy được Stockfish. Kiểm tra file assets/stockfish.bin!"
                                 }
                                 isAnalyzing = false
                             }
@@ -227,6 +224,7 @@ class MainActivity : ComponentActivity() {
         try {
             val binFile = File(filesDir, "stockfish")
             if (!binFile.exists()) {
+                // Copy từ assets ra bộ nhớ nội bộ
                 assets.open("stockfish.bin").use { input ->
                     binFile.outputStream().use { output -> input.copyTo(output) }
                 }
@@ -293,8 +291,6 @@ class MainActivity : ComponentActivity() {
             for (r in 7 downTo 0) {
                 Row {
                     for (f in 0..7) {
-                        // Sử dụng Square.values() và lấy theo index (rank * 8 + file)
-                        // Đây là cách chuẩn nhất để không bị lỗi hàm getSquare
                         val sq = Square.values()[r * 8 + f]
                         
                         val piece = board.getPiece(sq)
