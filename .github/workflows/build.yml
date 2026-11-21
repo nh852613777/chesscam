@@ -23,10 +23,10 @@ jobs:
       - name: Download and extract Stockfish
         run: |
           mkdir -p app/src/main/assets
-          # Sử dụng link tải chính xác từ bản phát hành mới nhất
-          curl -L -o sf.zip https://github.com/official-stockfish/Stockfish/releases/download/sf_16.1/stockfish-android-arm64-v8a.zip
-          unzip -o sf.zip -d temp_sf
-          # Tìm file binary bên trong và copy ra assets
+          # Link chính thức từ stockfishchess.org (bản ARM64 universal)
+          curl -L -o sf.tar.gz https://github.com/official-stockfish/Stockfish/releases/download/sf_16.1/stockfish-android-arm64-universal.tar.gz
+          tar -xzf sf.tar.gz -C temp_sf
+          # Copy file binary ra assets
           find temp_sf -type f -name "stockfish*" -exec cp {} app/src/main/assets/stockfish.bin \;
           chmod +x app/src/main/assets/stockfish.bin
 
