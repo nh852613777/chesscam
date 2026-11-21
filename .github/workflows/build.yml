@@ -20,11 +20,13 @@ jobs:
       - name: Fix gradle wrapper jar
         run: curl -L -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.5.0/gradle/wrapper/gradle-wrapper.jar
 
-      - name: Download Stockfish for Android
+      - name: Download and extract Stockfish
         run: |
           mkdir -p app/src/main/assets
-          # Tải trực tiếp file binary arm64-v8a, không giải nén zip
-          curl -L -o app/src/main/assets/stockfish.bin https://github.com/official-stockfish/Stockfish/releases/download/sf_16/stockfish-android-arm64-v8a
+          curl -L -o sf.zip https://github.com/official-stockfish/Stockfish/releases/download/sf_16/stockfish-android-arm64-v8a.zip
+          unzip -o sf.zip -d temp_sf
+          # Tìm file binary bên trong và copy ra assets
+          find temp_sf -type f -name "stockfish*" -exec cp {} app/src/main/assets/stockfish.bin \;
           chmod +x app/src/main/assets/stockfish.bin
 
       - name: Build with Gradle
