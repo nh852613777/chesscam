@@ -21,6 +21,8 @@ import com.github.bhlangonijr.chesslib.Square
 import com.github.bhlangonijr.chesslib.Piece
 import com.github.bhlangonijr.chesslib.Side
 import com.github.bhlangonijr.chesslib.move.Move
+import com.github.bhlangonijr.chesslib.PieceType
+import com.github.bhlangonijr.chesslib.Rank
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -31,55 +33,112 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun ChessScreen() {
-        var myColor by remember { mutableStateOf(Side.WHITE) }
-        var board by remember { mutableStateOf(Board()) }
+        var myColor by remember { mutableStateOf<Side>(Side.WHITE) }
+        var board by remember { mutableStateOf<Board>(Board()) }
         var selectedSquare by remember { mutableStateOf<Square?>(null) }
-        var status by remember { mutableStateOf("Chọn màu của bạn ở trên.") }
+        
+        var status by remember { mutableStateOf("Chọn màu của bạn.") }
         var isAnalyzing by remember { mutableStateOf(false) }
         
+        var showPromoDialog by remember { mutableStateOf(false) }
+        var promoFrom by remember { mutableStateOf<Square?>(null) }
+        var promoTo by remember { mutableStateOf<Square?>(null) }
+
+        var bestMoveText by remember { mutableStateOf("") }
+        var scoreText by remember { mutableStateOf("") }
+        var pvText by remember { mutableStateOf("") }
+        
         var suggestedMove by remember { mutableStateOf<Pair<Square, Square>?>(null) }
-        var analysisText by remember { mutableStateOf("") }
+
+        fun executeMove(move: Move) {
+            board.doMove(move)
+            selectedSquare = null
+            suggestedMove = null
+            bestMoveText = ""
+            scoreText = ""
+            pvText = ""
+            status = "Đã đi nước: $move. Bấm 'AI Phân Tích'."
+        }
 
         fun onSquareClick(sq: Square) {
-            if (isAnalyzing) return
+            if (isAnalyzing || showPromoDialog) return
             
             val currentTurn = board.sideToMove
             val piece = board.getPiece(sq)
 
             if (currentTurn != myColor) {
-                // LƯỢT ĐỐI THỦ: Cho phép chạm để nhập nước đi
                 if (selectedSquare == null) {
                     if (piece != Piece.NONE && piece.pieceSide == currentTurn) {
                         selectedSquare = sq
                         status = "Đang nhập nước đối thủ. Chạm ô đích."
                     }
                 } else {
-                    val move = Move(selectedSquare, sq)
+                    val from = selectedSquare!!
+                    val pFrom = board.getPiece(from)
+                    
+                    if (pFrom.pieceType == PieceType.PAWN && 
+                        ((pFrom.pieceSide == Side.WHITE && sq.rank == Rank.RANK_8) || 
+                         (pFrom.pieceSide == Side.BLACK && sq.rank == Rank.RANK_1))) {
+                        
+                        if (board.isMoveLegal(Move(from, sq, Piece.make(PieceType.QUEEN, pFrom.pieceSide)), true)) {
+                            promoFrom = from
+                            promoTo = sq
+                            showPromoDialog = true
+                            status = "Chọn quân để phong cấp!"
+                            return
+                        }
+                    }
+                    
+                    val move = Move(from, sq)
                     if (board.isMoveLegal(move, true)) {
-                        board.doMove(move)
-                        selectedSquare = null
-                        suggestedMove = null
-                        status = "Đã nhập nước đối thủ. Bấm 'AI Phân Tích' để xem nước đi."
+                        executeMove(move)
                     } else {
                         status = "Nước đi không hợp lệ!"
                         selectedSquare = null
                     }
                 }
             } else {
-                // LƯỢT CỦA BẠN
                 status = "Lượt của bạn. Bấm 'AI Phân Tích'."
             }
         }
 
+        if (showPromoDialog) {
+            AlertDialog(
+                onDismissRequest = { showPromoDialog = false },
+                title = { Text("Phong Cấp") },
+                text = { Text("Chọn quân để phong cấp:") },
+                confirmButton = {
+                    Row {
+                        val promoOptions = listOf(
+                            "Hậu" to PieceType.QUEEN,
+                            "Xe" to PieceType.ROOK,
+                            "Tượng" to PieceType.BISHOP,
+                            "Mã" to PieceType.KNIGHT
+                        )
+                        promoOptions.forEach { (name, type) ->
+                            TextButton(onClick = {
+                                val from = promoFrom!!
+                                val to = promoTo!!
+                                val pFrom = board.getPiece(from)
+                                val move = Move(from, to, Piece.make(type, pFrom.pieceSide))
+                                if (board.isMoveLegal(move, true)) {
+                                    executeMove(move)
+                                }
+                                showPromoDialog = false
+                            }) { Text(name) }
+                        }
+                    }
+                }
+            )
+        }
+
         Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
-            
             Text("Bạn chơi màu gì?", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = { myColor = Side.WHITE; board = Board(); suggestedMove = null; status = "Bạn chơi Trắng." },
                     colors = ButtonDefaults.buttonColors(containerColor = if (myColor == Side.WHITE) Color.Green else Color.Gray)
                 ) { Text("Trắng") }
-                
                 Button(
                     onClick = { myColor = Side.BLACK; board = Board(); suggestedMove = null; status = "Bạn chơi Đen." },
                     colors = ButtonDefaults.buttonColors(containerColor = if (myColor == Side.BLACK) Color.Green else Color.Gray)
@@ -87,19 +146,20 @@ class MainActivity : ComponentActivity() {
             }
 
             Spacer(Modifier.height(16.dp))
-            
             BoardView(board, selectedSquare, suggestedMove, ::onSquareClick)
 
             Spacer(Modifier.height(16.dp))
             
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp)) {
-                    Text("Trợ lý AI (Stockfish)", fontSize = 14.sp, color = Color.Gray)
-                    Spacer(Modifier.height(4.dp))
+                    Text("KẾT QUẢ PHÂN TÍCH (Stockfish)", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
+                    Spacer(Modifier.height(8.dp))
                     if (isAnalyzing) {
                         Text("Đang tính toán...", color = Color.Blue)
                     } else {
-                        Text(analysisText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text("Score: $scoreText", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text("Nước tốt nhất: $bestMoveText", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFF008000))
+                        Text("Biến thể: $pvText", fontSize = 14.sp, color = Color.DarkGray)
                     }
                 }
             }
@@ -110,22 +170,30 @@ class MainActivity : ComponentActivity() {
                 Button(
                     onClick = {
                         isAnalyzing = true
-                        analysisText = "Đang tìm nước đi..."
+                        bestMoveText = "..."
+                        scoreText = "..."
+                        pvText = "..."
                         suggestedMove = null
                         val fen = board.fen
                         
                         Thread {
-                            val bestMoveStr = runStockfish(fen)
+                            val result = runStockfish(fen)
                             runOnUiThread {
-                                if (bestMoveStr != null && bestMoveStr != "(none)") {
-                                    val sq1 = Square.valueOf(bestMoveStr.substring(0, 2).uppercase())
-                                    val sq2 = Square.valueOf(bestMoveStr.substring(2, 4).uppercase())
-                                    suggestedMove = Pair(sq1, sq2)
+                                if (result != null) {
+                                    scoreText = result.score
+                                    bestMoveText = result.bestMove
+                                    pvText = result.pv
                                     
-                                    val moveString = "${bestMoveStr.substring(0,2)} -> ${bestMoveStr.substring(2,4)}"
-                                    analysisText = "Nước đi tốt nhất: $moveString"
+                                    if (result.bestMove != "(none)") {
+                                        try {
+                                            val sq1 = Square.valueOf(result.bestMove.substring(0, 2).uppercase())
+                                            val sq2 = Square.valueOf(result.bestMove.substring(2, 4).uppercase())
+                                            suggestedMove = Pair(sq1, sq2)
+                                        } catch (e: Exception) {}
+                                    }
+                                    status = "Phân tích hoàn tất."
                                 } else {
-                                    analysisText = "Không tìm thấy nước đi."
+                                    status = "Lỗi khi chạy Stockfish."
                                 }
                                 isAnalyzing = false
                             }
@@ -138,7 +206,9 @@ class MainActivity : ComponentActivity() {
                     board = Board()
                     selectedSquare = null
                     suggestedMove = null
-                    analysisText = ""
+                    bestMoveText = ""
+                    scoreText = ""
+                    pvText = ""
                     status = "Đã reset bàn cờ." 
                 }) { Text("Reset") }
             }
@@ -148,7 +218,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    fun runStockfish(fen: String): String? {
+    data class AnalysisResult(val bestMove: String, val score: String, val pv: String)
+
+    fun runStockfish(fen: String): AnalysisResult? {
         try {
             val binFile = File(filesDir, "stockfish")
             if (!binFile.exists()) {
@@ -164,17 +236,34 @@ class MainActivity : ComponentActivity() {
 
             writer.write("uci\n"); writer.flush()
             var line: String?
-            while (true) {
-                line = reader.readLine() ?: break
-                if (line == "uciok") break
-            }
+            while (true) { line = reader.readLine() ?: break; if (line == "uciok") break }
 
             writer.write("position fen $fen\n"); writer.flush()
             writer.write("go depth 15\n"); writer.flush()
 
             var bestMove: String? = null
+            var finalScore = "0.0"
+            var finalPv = ""
+
             while (true) {
                 line = reader.readLine() ?: break
+                if (line.startsWith("info depth") && line.contains("score")) {
+                    val parts = line.split(" ")
+                    for (i in parts.indices) {
+                        if (parts[i] == "score") {
+                            if (parts[i+1] == "cp") {
+                                val cp = parts[i+2].toIntOrNull() ?: 0
+                                finalScore = String.format("%+.1f", cp / 100.0)
+                            } else if (parts[i+1] == "mate") {
+                                finalScore = "Mate trong ${parts[i+2]}"
+                            }
+                        }
+                        if (parts[i] == "pv") {
+                            finalPv = parts.subList(i + 1, minOf(parts.size, i + 4)).joinToString(" ")
+                            break
+                        }
+                    }
+                }
                 if (line.startsWith("bestmove")) {
                     bestMove = line.split(" ")[1]
                     break
@@ -182,7 +271,8 @@ class MainActivity : ComponentActivity() {
             }
             writer.write("quit\n"); writer.flush()
             process.waitFor()
-            return bestMove
+            
+            return if (bestMove != null) AnalysisResult(bestMove, finalScore, finalPv) else null
         } catch (e: Exception) {
             e.printStackTrace()
             return null
