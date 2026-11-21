@@ -10,7 +10,7 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven { url = uri("https://jitpack.io") } // Cực kỳ quan trọng để tải thư viện cờ vua
+        maven { url = uri("https://jitpack.io") } // Quan trọng: Thêm kho chứa chesslib
     }
 }
 rootProject.name = "ChessCam"
