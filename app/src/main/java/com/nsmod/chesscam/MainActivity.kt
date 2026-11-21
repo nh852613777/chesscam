@@ -76,11 +76,13 @@ class MainActivity : ComponentActivity() {
                     val from = selectedSquare!!
                     val pFrom = board.getPiece(from)
                     
+                    // Kiểm tra phong cấp
                     if (pFrom.pieceType == PieceType.PAWN && 
                         ((pFrom.pieceSide == Side.WHITE && sq.rank == Rank.RANK_8) || 
                          (pFrom.pieceSide == Side.BLACK && sq.rank == Rank.RANK_1))) {
                         
-                        if (board.isMoveLegal(Move(from, sq, Piece.make(PieceType.QUEEN, pFrom.pieceSide)), true)) {
+                        // Dùng Piece.make(pieceSide, pieceType) theo chuẩn chesslib
+                        if (board.isMoveLegal(Move(from, sq, Piece.make(pFrom.pieceSide, PieceType.QUEEN)), true)) {
                             promoFrom = from
                             promoTo = sq
                             showPromoDialog = true
@@ -120,7 +122,8 @@ class MainActivity : ComponentActivity() {
                                 val from = promoFrom!!
                                 val to = promoTo!!
                                 val pFrom = board.getPiece(from)
-                                val move = Move(from, to, Piece.make(type, pFrom.pieceSide))
+                                // Dùng Piece.make(pieceSide, pieceType)
+                                val move = Move(from, to, Piece.make(pFrom.pieceSide, type))
                                 if (board.isMoveLegal(move, true)) {
                                     executeMove(move)
                                 }
@@ -290,9 +293,9 @@ class MainActivity : ComponentActivity() {
             for (r in 7 downTo 0) {
                 Row {
                     for (f in 0..7) {
-                        val file = com.github.bhlangonijr.chesslib.File.values()[f]
-                        val rank = com.github.bhlangonijr.chesslib.Rank.values()[r]
-                        val sq = Square.getSquare(file, rank)
+                        // Sử dụng Square.values() và lấy theo index (rank * 8 + file)
+                        // Đây là cách chuẩn nhất để không bị lỗi hàm getSquare
+                        val sq = Square.values()[r * 8 + f]
                         
                         val piece = board.getPiece(sq)
                         val light = (r + f) % 2 == 0
