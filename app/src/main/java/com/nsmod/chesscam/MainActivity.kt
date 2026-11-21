@@ -1,225 +1,3 @@
-package com.nsmod.chesscam
-
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.github.bhlangonijr.chesslib.Board
-import com.github.bhlangonijr.chesslib.Square
-import com.github.bhlangonijr.chesslib.Piece
-import com.github.bhlangonijr.chesslib.Side
-import com.github.bhlangonijr.chesslib.move.Move
-import com.github.bhlangonijr.chesslib.PieceType
-import com.github.bhlangonijr.chesslib.Rank
-import java.io.File
-
-class MainActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContent { ChessScreen() }
-    }
-
-    @Composable
-    fun ChessScreen() {
-        var myColor by remember { mutableStateOf<Side>(Side.WHITE) }
-        var board by remember { mutableStateOf<Board>(Board()) }
-        var selectedSquare by remember { mutableStateOf<Square?>(null) }
-        
-        var status by remember { mutableStateOf("Chọn màu của bạn.") }
-        var isAnalyzing by remember { mutableStateOf(false) }
-        
-        var showPromoDialog by remember { mutableStateOf(false) }
-        var promoFrom by remember { mutableStateOf<Square?>(null) }
-        var promoTo by remember { mutableStateOf<Square?>(null) }
-
-        var bestMoveText by remember { mutableStateOf("") }
-        var scoreText by remember { mutableStateOf("") }
-        var pvText by remember { mutableStateOf("") }
-        
-        var suggestedMove by remember { mutableStateOf<Pair<Square, Square>?>(null) }
-
-        fun executeMove(move: Move) {
-            board.doMove(move)
-            selectedSquare = null
-            suggestedMove = null
-            bestMoveText = ""
-            scoreText = ""
-            pvText = ""
-            status = "Đã đi nước: $move. Bấm 'AI Phân Tích'."
-        }
-
-        fun onSquareClick(sq: Square) {
-            if (isAnalyzing || showPromoDialog) return
-            
-            val currentTurn = board.sideToMove
-            val piece = board.getPiece(sq)
-
-            if (currentTurn != myColor) {
-                if (selectedSquare == null) {
-                    if (piece != Piece.NONE && piece.pieceSide == currentTurn) {
-                        selectedSquare = sq
-                        status = "Đang nhập nước đối thủ. Chạm ô đích."
-                    }
-                } else {
-                    val from = selectedSquare!!
-                    val pFrom = board.getPiece(from)
-                    
-                    if (pFrom.pieceType == PieceType.PAWN && 
-                        ((pFrom.pieceSide == Side.WHITE && sq.rank == Rank.RANK_8) || 
-                         (pFrom.pieceSide == Side.BLACK && sq.rank == Rank.RANK_1))) {
-                        
-                        if (board.isMoveLegal(Move(from, sq, Piece.make(pFrom.pieceSide, PieceType.QUEEN)), true)) {
-                            promoFrom = from
-                            promoTo = sq
-                            showPromoDialog = true
-                            status = "Chọn quân để phong cấp!"
-                            return
-                        }
-                    }
-                    
-                    val move = Move(from, sq)
-                    if (board.isMoveLegal(move, true)) {
-                        executeMove(move)
-                    } else {
-                        status = "Nước đi không hợp lệ!"
-                        selectedSquare = null
-                    }
-                }
-            } else {
-                status = "Lượt của bạn. Bấm 'AI Phân Tích'."
-            }
-        }
-
-        if (showPromoDialog) {
-            AlertDialog(
-                onDismissRequest = { showPromoDialog = false },
-                title = { Text("Phong Cấp") },
-                text = { Text("Chọn quân để phong cấp:") },
-                confirmButton = {
-                    Row {
-                        val promoOptions = listOf(
-                            "Hậu" to PieceType.QUEEN,
-                            "Xe" to PieceType.ROOK,
-                            "Tượng" to PieceType.BISHOP,
-                            "Mã" to PieceType.KNIGHT
-                        )
-                        promoOptions.forEach { (name, type) ->
-                            TextButton(onClick = {
-                                val from = promoFrom!!
-                                val to = promoTo!!
-                                val pFrom = board.getPiece(from)
-                                val move = Move(from, to, Piece.make(pFrom.pieceSide, type))
-                                if (board.isMoveLegal(move, true)) {
-                                    executeMove(move)
-                                }
-                                showPromoDialog = false
-                            }) { Text(name) }
-                        }
-                    }
-                }
-            )
-        }
-
-        Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
-            Text("Bạn chơi màu gì?", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = { myColor = Side.WHITE; board = Board(); suggestedMove = null; status = "Bạn chơi Trắng." },
-                    colors = ButtonDefaults.buttonColors(containerColor = if (myColor == Side.WHITE) Color.Green else Color.Gray)
-                ) { Text("Trắng") }
-                Button(
-                    onClick = { myColor = Side.BLACK; board = Board(); suggestedMove = null; status = "Bạn chơi Đen." },
-                    colors = ButtonDefaults.buttonColors(containerColor = if (myColor == Side.BLACK) Color.Green else Color.Gray)
-                ) { Text("Đen") }
-            }
-
-            Spacer(Modifier.height(16.dp))
-            BoardView(board, selectedSquare, suggestedMove, ::onSquareClick)
-
-            Spacer(Modifier.height(16.dp))
-            
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(12.dp)) {
-                    Text("KẾT QUẢ PHÂN TÍCH (Stockfish)", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
-                    Spacer(Modifier.height(8.dp))
-                    if (isAnalyzing) {
-                        Text("Đang tính toán...", color = Color.Blue)
-                    } else {
-                        Text("Score: $scoreText", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Text("Nước tốt nhất: $bestMoveText", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFF008000))
-                        Text("Biến thể: $pvText", fontSize = 14.sp, color = Color.DarkGray)
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(12.dp))
-            
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = {
-                        isAnalyzing = true
-                        bestMoveText = "..."
-                        scoreText = "..."
-                        pvText = "..."
-                        suggestedMove = null
-                        val fen = board.fen
-                        
-                        Thread {
-                            val result = runStockfish(fen)
-                            runOnUiThread {
-                                if (result != null) {
-                                    scoreText = result.score
-                                    bestMoveText = result.bestMove
-                                    pvText = result.pv
-                                    
-                                    if (result.bestMove != "(none)") {
-                                        try {
-                                            val sq1 = Square.valueOf(result.bestMove.substring(0, 2).uppercase())
-                                            val sq2 = Square.valueOf(result.bestMove.substring(2, 4).uppercase())
-                                            suggestedMove = Pair(sq1, sq2)
-                                        } catch (e: Exception) {}
-                                    }
-                                    status = "Phân tích hoàn tất."
-                                } else {
-                                    status = "Lỗi: Không chạy được Stockfish. Kiểm tra file assets/stockfish.bin!"
-                                }
-                                isAnalyzing = false
-                            }
-                        }.start()
-                    },
-                    enabled = board.sideToMove == myColor && !isAnalyzing && !board.isMated && !board.isDraw
-                ) { Text("AI Phân Tích") }
-
-                Button(onClick = { 
-                    board = Board()
-                    selectedSquare = null
-                    suggestedMove = null
-                    bestMoveText = ""
-                    scoreText = ""
-                    pvText = ""
-                    status = "Đã reset bàn cờ." 
-                }) { Text("Reset") }
-            }
-            
-            Spacer(Modifier.height(8.dp))
-            Text(status, fontSize = 14.sp, color = Color.DarkGray)
-        }
-    }
-
-    data class AnalysisResult(val bestMove: String, val score: String, val pv: String)
-
     fun runStockfish(fen: String): AnalysisResult? {
         try {
             val binFile = File(filesDir, "stockfish")
@@ -228,16 +6,24 @@ class MainActivity : ComponentActivity() {
                 assets.open("stockfish.bin").use { input ->
                     binFile.outputStream().use { output -> input.copyTo(output) }
                 }
-                binFile.setExecutable(true)
             }
+            // Cấp quyền thực thi (chmod 755) cho file
+            binFile.setExecutable(true, false)
 
+            // Khởi chạy tiến trình
             val process = ProcessBuilder(binFile.absolutePath).redirectErrorStream(true).start()
             val writer = process.outputStream.bufferedWriter()
             val reader = process.inputStream.bufferedReader()
 
             writer.write("uci\n"); writer.flush()
             var line: String?
-            while (true) { line = reader.readLine() ?: break; if (line == "uciok") break }
+            var uciOk = false
+            while (true) { 
+                line = reader.readLine() ?: break
+                if (line == "uciok") { uciOk = true; break } 
+            }
+            
+            if (!uciOk) return null // Nếu không nhận được uciok, báo lỗi
 
             writer.write("position fen $fen\n"); writer.flush()
             writer.write("go depth 15\n"); writer.flush()
@@ -279,54 +65,3 @@ class MainActivity : ComponentActivity() {
             return null
         }
     }
-
-    @Composable
-    fun BoardView(
-        board: Board, 
-        selected: Square?, 
-        suggested: Pair<Square, Square>?, 
-        onSquareClick: (Square) -> Unit
-    ) {
-        Column {
-            for (r in 7 downTo 0) {
-                Row {
-                    for (f in 0..7) {
-                        val sq = Square.values()[r * 8 + f]
-                        
-                        val piece = board.getPiece(sq)
-                        val light = (r + f) % 2 == 0
-                        val isSelected = selected == sq
-                        
-                        val isSugFrom = suggested?.first == sq
-                        val isSugTo = suggested?.second == sq
-                        
-                        val bgColor = when {
-                            isSelected -> Color(0xFFFFD700)
-                            isSugFrom -> Color(0xFF90EE90)
-                            isSugTo -> Color(0xFF32CD32)
-                            light -> Color(0xFFEEEED2)
-                            else -> Color(0xFF769656)
-                        }
-
-                        Surface(
-                            color = bgColor,
-                            modifier = Modifier.size(40.dp).clickable { onSquareClick(sq) },
-                            border = if (isSugTo) BorderStroke(2.dp, Color.Red) else null
-                        ) {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = when (piece) {
-                                        Piece.WHITE_PAWN -> "♙"; Piece.WHITE_KNIGHT -> "♘"; Piece.WHITE_BISHOP -> "♗"; Piece.WHITE_ROOK -> "♖"; Piece.WHITE_QUEEN -> "♕"; Piece.WHITE_KING -> "♔"
-                                        Piece.BLACK_PAWN -> "♟"; Piece.BLACK_KNIGHT -> "♞"; Piece.BLACK_BISHOP -> "♝"; Piece.BLACK_ROOK -> "♜"; Piece.BLACK_QUEEN -> "♛"; Piece.BLACK_KING -> "♚"
-                                        else -> ""
-                                    },
-                                    fontSize = 28.sp
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
