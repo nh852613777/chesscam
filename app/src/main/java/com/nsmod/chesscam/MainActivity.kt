@@ -16,11 +16,27 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.github.bhlangonijr.chesslib.Board
+import com.github.bhlangonijr.chesslib.Square
+import com.github.bhlangonijr.chesslib.Piece
+import com.github.bhlangonijr.chesslib.Side
+import com.github.bhlangonijr.chesslib.move.Move
+import com.github.bhlangonijr.chesslib.PieceType
+import com.github.bhlangonijr.chesslib.Rank
 import java.io.File
 
+// Sử dụng thư viện Stockfish AAR
+import io.github.navikt.stockfish.Stockfish
+import io.github.navikt.stockfish.StockfishEngine
+
 class MainActivity : ComponentActivity() {
+    private var stockfish: Stockfish? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Khởi tạo engine với thư viện AAR
+        stockfish = Stockfish(applicationContext)
+        
         setContent { ChessScreen() }
     }
 
@@ -111,18 +127,27 @@ class MainActivity : ComponentActivity() {
                         analysisText = "Đang tìm nước đi..."
                         suggested = null
                         val fen = gridToFen(grid, currentTurn)
+                        
                         Thread {
-                            val bestMoveStr = runStockfish(fen)
-                            runOnUiThread {
-                                if (bestMoveStr != null && bestMoveStr != "(none)") {
-                                    val f1 = bestMoveStr[0] - 'a'; val r1 = 8 - (bestMoveStr[1] - '0')
-                                    val f2 = bestMoveStr[2] - 'a'; val r2 = 8 - (bestMoveStr[3] - '0')
-                                    suggested = Pair(Pair(f1, r1), Pair(f2, r2))
-                                    analysisText = "Nước đi tốt nhất: ${bestMoveStr.substring(0,2)} -> ${bestMoveStr.substring(2,4)}"
-                                } else {
-                                    analysisText = "Lỗi: Không chạy được Stockfish."
+                            // Sử dụng API của thư viện
+                            try {
+                                val bestMove = stockfish?.bestMove(fen) ?: return@Thread
+                                runOnUiThread {
+                                    if (bestMove != "(none)") {
+                                        val f1 = bestMove[0] - 'a'; val r1 = 8 - (bestMove[1] - '0')
+                                        val f2 = bestMove[2] - 'a'; val r2 = 8 - (bestMove[3] - '0')
+                                        suggested = Pair(Pair(f1, r1), Pair(f2, r2))
+                                        analysisText = "Nước đi tốt nhất: ${bestMove.substring(0,2)} -> ${bestMove.substring(2,4)}"
+                                    } else {
+                                        analysisText = "Không tìm thấy nước đi."
+                                    }
+                                    isAnalyzing = false
                                 }
-                                isAnalyzing = false
+                            } catch (e: Exception) {
+                                runOnUiThread {
+                                    analysisText = "Lỗi: ${e.message}"
+                                    isAnalyzing = false
+                                }
                             }
                         }.start()
                     },
@@ -136,13 +161,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // --- CÁC HÀM LOGIC CỦA BÀN CỜ (GIỮ NGUYÊN) ---
     fun isValidMove(g: Array<Array<Char>>, f1: Int, r1: Int, f2: Int, r2: Int): Boolean {
         val p = g[r1][f1]
         if (p == '.') return false
         val isWhite = p.isUpperCase()
         val target = g[r2][f2]
         if (target != '.' && target.isUpperCase() == isWhite) return false
-
         val df = kotlin.math.abs(f2 - f1); val dr = kotlin.math.abs(r2 - r1)
         return when (p.uppercaseChar()) {
             'P' -> {
@@ -187,30 +212,6 @@ class MainActivity : ComponentActivity() {
         return rows.joinToString("/") + " $turn - - 0 1"
     }
 
-    fun runStockfish(fen: String): String? {
-        try {
-            // ĐƯỜNG DẪN MỚI: Lấy trực tiếp từ thư mục thư viện hệ thống của Android
-            val binFile = File(applicationInfo.nativeLibraryDir, "libstockfish.so")
-            if (!binFile.exists()) return null
-            
-            val process = ProcessBuilder(binFile.absolutePath).redirectErrorStream(true).start()
-            val writer = process.outputStream.bufferedWriter()
-            val reader = process.inputStream.bufferedReader()
-            writer.write("uci\n"); writer.flush()
-            var line: String?
-            while (true) { line = reader.readLine() ?: break; if (line == "uciok") break }
-            writer.write("position fen $fen\n"); writer.flush()
-            writer.write("go depth 15\n"); writer.flush()
-            var bestMove: String? = null
-            while (true) { line = reader.readLine() ?: break; if (line.startsWith("bestmove")) { bestMove = line.split(" ")[1]; break } }
-            writer.write("quit\n"); writer.flush(); process.waitFor()
-            return bestMove
-        } catch (e: Exception) { 
-            e.printStackTrace()
-            return null 
-        }
-    }
-
     @Composable
     fun BoardView(g: Array<Array<Char>>, selected: Pair<Int, Int>?, suggested: Pair<Pair<Int, Int>, Pair<Int, Int>>?, onSquareClick: (Int, Int) -> Unit) {
         Column {
@@ -222,7 +223,6 @@ class MainActivity : ComponentActivity() {
                         val isSelected = selected == Pair(f, r)
                         val isSugFrom = suggested?.first == Pair(f, r)
                         val isSugTo = suggested?.second == Pair(f, r)
-                        
                         val bgColor = when {
                             isSelected -> Color(0xFFFFD700)
                             isSugFrom -> Color(0xFF90EE90)
@@ -230,7 +230,6 @@ class MainActivity : ComponentActivity() {
                             light -> Color(0xFFEEEED2)
                             else -> Color(0xFF769656)
                         }
-
                         Surface(
                             color = bgColor,
                             modifier = Modifier.size(40.dp).clickable { onSquareClick(f, r) },
