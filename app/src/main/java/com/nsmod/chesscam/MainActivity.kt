@@ -33,15 +33,18 @@ class MainActivity : ComponentActivity() {
         var status by remember { mutableStateOf("Chọn màu của bạn.") }
         var isAnalyzing by remember { mutableStateOf(false) }
         
+        // Biến đếm số bước đi, giải quyết triệt để lỗi nhận diện lượt
+        var moveCount by remember { mutableIntStateOf(0) }
+        val currentTurn = if (moveCount % 2 == 0) "w" else "b"
+
         var suggested by remember { mutableStateOf<Pair<Pair<Int, Int>, Pair<Int, Int>>?>(null) }
         var analysisText by remember { mutableStateOf("") }
 
         fun onSquareClick(f: Int, r: Int) {
             if (isAnalyzing) return
             val piece = grid[r][f]
-            val turn = getTurn(grid)
 
-            if (turn != myColor) {
+            if (currentTurn != myColor) {
                 // Nhập nước đối thủ
                 if (selected == null) {
                     if (piece != '.') {
@@ -61,6 +64,7 @@ class MainActivity : ComponentActivity() {
                             grid = newG
                             selected = null
                             suggested = null
+                            moveCount++
                             status = "Đã nhập nước đối thủ. Bấm 'AI Phân Tích'."
                         } else {
                             status = "Nước đi không hợp lệ!"
@@ -77,11 +81,11 @@ class MainActivity : ComponentActivity() {
             Text("Bạn chơi màu gì?", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
-                    onClick = { myColor = "w"; grid = startGrid(); suggested = null; status = "Bạn chơi Trắng." },
+                    onClick = { myColor = "w"; grid = startGrid(); suggested = null; moveCount = 0; status = "Bạn chơi Trắng." },
                     colors = ButtonDefaults.buttonColors(containerColor = if (myColor == "w") Color.Green else Color.Gray)
                 ) { Text("Trắng") }
                 Button(
-                    onClick = { myColor = "b"; grid = startGrid(); suggested = null; status = "Bạn chơi Đen." },
+                    onClick = { myColor = "b"; grid = startGrid(); suggested = null; moveCount = 0; status = "Bạn chơi Đen." },
                     colors = ButtonDefaults.buttonColors(containerColor = if (myColor == "b") Color.Green else Color.Gray)
                 ) { Text("Đen") }
             }
@@ -109,7 +113,7 @@ class MainActivity : ComponentActivity() {
                         isAnalyzing = true
                         analysisText = "Đang tìm nước đi..."
                         suggested = null
-                        val fen = gridToFen(grid, myColor)
+                        val fen = gridToFen(grid, currentTurn)
                         Thread {
                             val bestMoveStr = runStockfish(fen)
                             runOnUiThread {
@@ -125,10 +129,10 @@ class MainActivity : ComponentActivity() {
                             }
                         }.start()
                     },
-                    enabled = getTurn(grid) == myColor && !isAnalyzing
+                    enabled = currentTurn == myColor && !isAnalyzing
                 ) { Text("AI Phân Tích") }
 
-                Button(onClick = { grid = startGrid(); selected = null; suggested = null; analysisText = ""; status = "Đã reset." }) { Text("Reset") }
+                Button(onClick = { grid = startGrid(); selected = null; suggested = null; analysisText = ""; moveCount = 0; status = "Đã reset." }) { Text("Reset") }
             }
             Spacer(Modifier.height(8.dp))
             Text(status, fontSize = 14.sp, color = Color.DarkGray)
@@ -157,16 +161,6 @@ class MainActivity : ComponentActivity() {
             'K' -> df <= 1 && dr <= 1 && (df + dr > 0)
             else -> false
         }
-    }
-
-    fun getTurn(g: Array<Array<Char>>): String {
-        var w = 0; var b = 0
-        for (r in 0..7) for (f in 0..7) {
-            val c = g[r][f]
-            if (c.isUpperCase() && c != '.') w++
-            if (c.isLowerCase() && c != '.') b++
-        }
-        return if (w == b || w > b) "w" else "b" 
     }
 
     fun startGrid(): Array<Array<Char>> {
